@@ -125,8 +125,21 @@ namespace ShotTracker
             if (pendingShot == null || collision == null || collision.gameObject == null)
                 return;
 
-            // Check if this collision is with a goalie
-            Player player = collision.gameObject.GetComponent<PlayerBodyV2>()?.Player;
+            Player player = null;
+
+            // Check if this collision is with a goalie's body
+            player = collision.gameObject.GetComponent<PlayerBodyV2>()?.Player;
+
+            // If not a body collision, check if it's a stick collision
+            if (player == null)
+            {
+                Stick stick = collision.gameObject.GetComponent<Stick>();
+                if (stick != null)
+                {
+                    player = stick.Player;
+                }
+            }
+
             if (player == null)
                 return;
 
@@ -184,6 +197,30 @@ namespace ShotTracker
             }
 
             return false;
+        }
+
+        public bool HasPendingShot()
+        {
+            return pendingShot != null;
+        }
+
+        public void UpgradePendingShotToGoal()
+        {
+            if (pendingShot != null)
+            {
+                // Copy goalie hit position if it exists
+                if (hitGoalie && pendingShot.GoalieHitPosition.HasValue)
+                {
+                    pendingShot.Data.GoalieHitPositionX = pendingShot.GoalieHitPosition.Value.x;
+                    pendingShot.Data.GoalieHitPositionY = pendingShot.GoalieHitPosition.Value.y;
+                    pendingShot.Data.GoalieHitPositionZ = pendingShot.GoalieHitPosition.Value.z;
+                }
+
+                pendingShot.Data.ShotType = "Goal";
+                ShotTrackerManager.Instance.RecordGoal(pendingShot.Data);
+                pendingShot = null;
+                hitGoalie = false;
+            }
         }
 
         private void UpdatePendingShots()

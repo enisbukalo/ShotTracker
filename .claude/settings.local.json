@@ -13,7 +13,15 @@
       "Bash(ls:*)",
       "Bash(find:*)",
       "WebFetch(domain:steamcommunity.com)",
-      "Bash(stat:*)"
+      "Bash(stat:*)",
+      "Bash(netsh advfirewall firewall show rule:*)",
+      "Bash(netstat:*)",
+      "Bash(ipconfig:*)",
+      "Bash(tail:*)",
+      "Bash(Test-NetConnection -ComputerName 192.168.50.69 -Port 7777)",
+      "Bash(powershell \"Test-NetConnection -ComputerName 192.168.50.69 -Port 7777\")",
+      "Bash(powershell \"Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction, DefaultOutboundAction\")",
+      "Bash(netsh advfirewall show:*)"
     ],
     "deny": [],
     "ask": []

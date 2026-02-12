@@ -34,7 +34,7 @@ namespace ShotTracker
         private Vector3 redGoalPosition;
         private bool goalsInitialized = false;
 
-        private const float GOAL_RADIUS = 3.0f;
+        private const float GOAL_RADIUS = 3.5f;
         private float lastGoalTime = 0f;
         private const float GOAL_COOLDOWN = 15f; // Prevent duplicate goal events within 15 seconds
 
@@ -170,6 +170,13 @@ namespace ShotTracker
             Plugin.Log($"[SERVER] SHOT ON GOAL: {shotData.PlayerName} ({shotData.Team}#{shotData.PlayerNumber}) -> {shotData.TargetGoal} | {shotData.ShotSpeed:F1} m/s");
         }
 
+        public void RecordGoal(ShotData shotData)
+        {
+            shotCollection.Shots.Add(shotData);
+            SaveToFile();
+            Plugin.Log($"[SERVER] GOAL: {shotData.PlayerName} ({shotData.Team}#{shotData.PlayerNumber}) -> {shotData.TargetGoal} | {shotData.ShotSpeed:F1} m/s");
+        }
+
         public bool HasPuckReachedGoalZone(string targetGoal, Vector3 puckPosition)
         {
             if (!goalsInitialized)
@@ -194,6 +201,17 @@ namespace ShotTracker
                 if (goalPuck.IsReplay != null && goalPuck.IsReplay.Value)
                     return;
 
+                // Try to upgrade pending shot first (this will have correct puck position from when stick released)
+                ShotTrackerComponent tracker = goalPuck.GetComponent<ShotTrackerComponent>();
+                if (tracker != null && tracker.HasPendingShot())
+                {
+                    tracker.UpgradePendingShotToGoal();
+                    lastGoalTime = Time.time;
+                    return;
+                }
+
+                // Fallback: If no pending shot exists, create goal record from current state
+                // (This shouldn't normally happen, but handles edge cases)
                 PlayerTeam scoringTeam = (PlayerTeam)message["team"];
 
                 var playerCollisions = goalPuck.GetPlayerCollisions();
@@ -254,7 +272,7 @@ namespace ShotTracker
                 shotCollection.Shots.Add(goalData);
                 lastGoalTime = Time.time;
                 SaveToFile();
-                Plugin.Log($"[SERVER] GOAL: {goalData.PlayerName} ({goalData.Team}#{goalData.PlayerNumber}) -> {targetGoalStr} | {goalData.ShotSpeed:F1} m/s");
+                Plugin.Log($"[SERVER] GOAL (fallback): {goalData.PlayerName} ({goalData.Team}#{goalData.PlayerNumber}) -> {targetGoalStr} | {goalData.ShotSpeed:F1} m/s");
             }
             catch (Exception ex)
             {

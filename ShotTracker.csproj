@@ -29,12 +29,17 @@
 
   <Target Name="PostBuildMoveDll" AfterTargets="Build">
     <PropertyGroup>
-      <TargetDir>C:\Program Files (x86)\Steam\steamapps\common\Puck\Plugins\ShotTracker</TargetDir>
+      <TargetDir>C:\Program Files (x86)\Steam\steamapps\common\Puck Dedicated Server\Plugins\ShotTracker</TargetDir>
+      <WorkshopDir>C:\Users\bukal\Documents\SteamWorkshopUploader_10_win\SteamWorkshopUploader\WorkshopContent\Shot Tracker</WorkshopDir>
     </PropertyGroup>
 
     <MakeDir Directories="$(TargetDir)" />
+    <MakeDir Directories="$(WorkshopDir)" />
+
     <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll" DestinationFolder="$(TargetDir)" OverwriteReadOnlyFiles="true" />
+    <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll" DestinationFolder="$(WorkshopDir)" OverwriteReadOnlyFiles="true" />
 
     <Message Importance="high" Text="Copied $(AssemblyName).dll to $(TargetDir)" />
+    <Message Importance="high" Text="Copied $(AssemblyName).dll to $(WorkshopDir)" />
   </Target>
 </Project>
