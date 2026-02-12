@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "WebFetch(domain:puck.gitbook.io)",
+      "WebSearch",
+      "Bash(dotnet:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(powershell -Command:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "WebFetch(domain:steamcommunity.com)",
+      "Bash(stat:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

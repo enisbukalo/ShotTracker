@@ -1,0 +1,266 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using Unity.Netcode;
+
+namespace ShotTracker
+{
+    /// <summary>
+    /// Lightweight component attached to each puck that tracks pending shots
+    /// </summary>
+    public class ShotTrackerComponent : MonoBehaviour
+    {
+        private Puck puck;
+        private PendingShot pendingShot = null; // Only track one shot at a time
+        private bool hitGoalie = false; // Track if goalie was hit during this shot
+
+        private const float DIRECTION_THRESHOLD = 0.5f;
+
+        private void Start()
+        {
+            // SERVER ONLY: Component should only exist on server
+            if (!NetworkManager.Singleton.IsServer)
+            {
+                Destroy(this);
+                return;
+            }
+
+            puck = GetComponent<Puck>();
+            if (puck == null)
+            {
+                Destroy(this);
+                return;
+            }
+
+            // Ensure manager exists and goals/physics are initialized
+            ShotTrackerManager.Instance.InitializeGoals();
+            ShotTrackerManager.Instance.InitializePhysics(puck);
+        }
+
+        private void FixedUpdate()
+        {
+            if (puck == null)
+                return;
+
+            GameManager gameManager = GameManager.Instance;
+            if (gameManager == null || gameManager.Phase != GamePhase.Playing)
+                return;
+
+            if (puck.IsReplay != null && puck.IsReplay.Value)
+                return;
+
+            UpdatePendingShots();
+        }
+
+        public void OnStickReleasedPuck(Stick stick)
+        {
+            if (stick == null || stick.Player == null)
+                return;
+
+            Player player = stick.Player;
+
+            // Null check for network variables
+            if (player.Team == null || player.Username == null || player.Number == null)
+                return;
+
+            if (!IsShotTowardGoal(out string targetGoal))
+                return;
+
+            // CRITICAL: Ensure shot is toward OPPONENT's goal (Blue shoots at Red, Red shoots at Blue)
+            string playerTeam = player.Team.Value.ToString();
+            if (playerTeam == targetGoal)
+                return;
+
+            Vector3 playerPos = Vector3.zero;
+            if (player.PlayerBody != null)
+            {
+                playerPos = player.PlayerBody.transform.position;
+            }
+
+            // Get normalized shot direction (magnitude = 1)
+            Vector3 shotDirection = Vector3.zero;
+            if (puck.Rigidbody != null)
+            {
+                shotDirection = puck.Rigidbody.linearVelocity.normalized;
+            }
+
+            ShotData shotData = new ShotData
+            {
+                PlayerName = player.Username.Value.ToString(),
+                PlayerNumber = player.Number.Value,
+                Team = player.Team.Value.ToString(),
+                PlayerPositionX = playerPos.x,
+                PlayerPositionY = playerPos.y,
+                PlayerPositionZ = playerPos.z,
+                PuckPositionX = puck.transform.position.x,
+                PuckPositionY = puck.transform.position.y,
+                PuckPositionZ = puck.transform.position.z,
+                ShotSpeed = puck.ShotSpeed,
+                ShotType = "Pending",
+                TargetGoal = targetGoal,
+                Timestamp = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"),
+                DirectionX = shotDirection.x,
+                DirectionY = shotDirection.y,
+                DirectionZ = shotDirection.z
+            };
+
+            // Replace any existing pending shot
+            pendingShot = new PendingShot
+            {
+                Data = shotData,
+                DetectionTime = Time.time
+            };
+        }
+
+        public void OnStickTouchedPuck()
+        {
+            // Any stick touch clears the pending shot
+            pendingShot = null;
+            hitGoalie = false;
+        }
+
+        public void OnPuckHitSomething(Collision collision)
+        {
+            // Check if puck hit a goalie while we're tracking a shot
+            if (pendingShot == null || collision == null || collision.gameObject == null)
+                return;
+
+            // Check if this collision is with a goalie
+            Player player = collision.gameObject.GetComponent<PlayerBodyV2>()?.Player;
+            if (player == null)
+                return;
+
+            // Null check for network variables
+            if (player.Role == null || player.Team == null)
+                return;
+
+            if (player.Role.Value == PlayerRole.Goalie)
+            {
+                // Verify this goalie is defending the target goal
+                string goalieTeam = player.Team.Value.ToString();
+                if (goalieTeam == pendingShot.Data.TargetGoal)
+                {
+                    hitGoalie = true;
+                    // Store the puck position when it hit the goalie
+                    pendingShot.GoalieHitPosition = puck.transform.position;
+                }
+            }
+        }
+
+        private bool IsShotTowardGoal(out string targetGoal)
+        {
+            targetGoal = null;
+
+            if (puck.Rigidbody == null)
+                return false;
+
+            Vector3 puckVelocity = puck.Rigidbody.linearVelocity;
+            if (puckVelocity.magnitude < 0.1f)
+                return false;
+
+            Vector3 velocityDirection = puckVelocity.normalized;
+            Vector3 puckPosition = puck.transform.position;
+
+            // Use manager's goal positions
+            Vector3 blueGoal = new Vector3(0, 0, 40.92f);
+            Vector3 redGoal = new Vector3(0, 0, -40.92f);
+
+            Vector3 toBlueGoal = (blueGoal - puckPosition).normalized;
+            float dotBlue = Vector3.Dot(velocityDirection, toBlueGoal);
+
+            Vector3 toRedGoal = (redGoal - puckPosition).normalized;
+            float dotRed = Vector3.Dot(velocityDirection, toRedGoal);
+
+            if (dotBlue > DIRECTION_THRESHOLD)
+            {
+                targetGoal = "Blue";
+                return true;
+            }
+
+            if (dotRed > DIRECTION_THRESHOLD)
+            {
+                targetGoal = "Red";
+                return true;
+            }
+
+            return false;
+        }
+
+        private void UpdatePendingShots()
+        {
+            if (pendingShot == null || puck == null || puck.transform == null)
+                return;
+
+            // Check if puck is in goal zone
+            bool currentlyInGoalZone = ShotTrackerManager.Instance.HasPuckReachedGoalZone(
+                pendingShot.Data.TargetGoal,
+                puck.transform.position
+            );
+
+            // Track zone entry
+            if (currentlyInGoalZone && !pendingShot.ReachedGoalZone)
+            {
+                pendingShot.ReachedGoalZone = true;
+            }
+
+            // If puck was in zone and now left zone → finalize shot
+            if (!currentlyInGoalZone && pendingShot.ReachedGoalZone)
+            {
+                // Check if goalie was hit during this shot
+                if (hitGoalie)
+                {
+                    // Copy goalie hit position to shot data
+                    if (pendingShot.GoalieHitPosition.HasValue)
+                    {
+                        pendingShot.Data.GoalieHitPositionX = pendingShot.GoalieHitPosition.Value.x;
+                        pendingShot.Data.GoalieHitPositionY = pendingShot.GoalieHitPosition.Value.y;
+                        pendingShot.Data.GoalieHitPositionZ = pendingShot.GoalieHitPosition.Value.z;
+                    }
+                    pendingShot.Data.ShotType = "Shot on Goal";
+                    ShotTrackerManager.Instance.RecordShotOnGoal(pendingShot.Data);
+                }
+                else
+                {
+                    pendingShot.Data.ShotType = "Shot";
+                    ShotTrackerManager.Instance.RecordShot(pendingShot.Data);
+                }
+                pendingShot = null;
+                hitGoalie = false;
+            }
+        }
+
+        private bool CheckIfHitsGoalie(string targetGoal, float detectionTime)
+        {
+            try
+            {
+                var playerCollisions = puck.GetPlayerCollisions();
+                if (playerCollisions == null)
+                    return false;
+
+                foreach (var collision in playerCollisions)
+                {
+                    Player player = collision.Key;
+
+                    // Null check for network variables during initialization
+                    if (player == null || player.Role == null || player.Team == null)
+                        continue;
+
+                    if (player.Role.Value == PlayerRole.Goalie)
+                    {
+                        // Verify this goalie is defending the target goal
+                        string goalieTeam = player.Team.Value.ToString();
+                        if (goalieTeam == targetGoal)
+                        {
+                            return true; // Hit the goalie defending this goal
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.LogError($"Goalie check error: {ex.Message}");
+            }
+            return false;
+        }
+    }
+}

@@ -1,0 +1,33 @@
+using Unity.Collections;
+using Unity.Netcode;
+using UnityEngine;
+
+namespace __GEN;
+
+internal class NetworkVariableSerializationHelper
+{
+	[RuntimeInitializeOnLoadMethod]
+	internal static void InitializeSerialization()
+	{
+		NetworkVariableSerializationTypedInitializers.InitializeSerializer_UnmanagedINetworkSerializable<NetworkObjectCollision>();
+		NetworkVariableSerializationTypedInitializers.InitializeEqualityChecker_UnmanagedIEquatable<NetworkObjectCollision>();
+		NetworkVariableSerializationTypedInitializers.InitializeSerializer_UnmanagedINetworkSerializable<NetworkObjectReference>();
+		NetworkVariableSerializationTypedInitializers.InitializeEqualityChecker_UnmanagedIEquatable<NetworkObjectReference>();
+		NetworkVariableSerializationTypedInitializers.InitializeSerializer_UnmanagedByMemcpy<bool>();
+		NetworkVariableSerializationTypedInitializers.InitializeEqualityChecker_UnmanagedIEquatable<bool>();
+		NetworkVariableSerializationTypedInitializers.InitializeSerializer_UnmanagedINetworkSerializable<GameState>();
+		NetworkVariableSerializationTypedInitializers.InitializeEqualityChecker_UnmanagedIEquatable<GameState>();
+		NetworkVariableSerializationTypedInitializers.InitializeSerializer_UnmanagedByMemcpy<byte>();
+		NetworkVariableSerializationTypedInitializers.InitializeEqualityChecker_UnmanagedIEquatable<byte>();
+		NetworkVariableSerializationTypedInitializers.InitializeSerializer_UnmanagedByMemcpy<PlayerState>();
+		NetworkVariableSerializationTypedInitializers.InitializeEqualityChecker_UnmanagedValueEquals<PlayerState>();
+		NetworkVariableSerializationTypedInitializers.InitializeSerializer_FixedString<FixedString32Bytes>();
+		NetworkVariableSerializationTypedInitializers.InitializeEqualityChecker_UnmanagedIEquatable<FixedString32Bytes>();
+		NetworkVariableSerializationTypedInitializers.InitializeSerializer_UnmanagedByMemcpy<PlayerHandedness>();
+		NetworkVariableSerializationTypedInitializers.InitializeEqualityChecker_UnmanagedValueEquals<PlayerHandedness>();
+		NetworkVariableSerializationTypedInitializers.InitializeSerializer_UnmanagedByMemcpy<PlayerTeam>();
+		NetworkVariableSerializationTypedInitializers.InitializeEqualityChecker_UnmanagedValueEquals<PlayerTeam>();
+		NetworkVariableSerializationTypedInitializers.InitializeSerializer_UnmanagedByMemcpy<PlayerRole>();
+		NetworkVariableSerializationTypedInitializers.InitializeEqualityChecker_UnmanagedValueEquals<PlayerRole>();
+	}
+}
