@@ -38,6 +38,8 @@ namespace ShotTracker
         private float lastGoalTime = 0f;
         private const float GOAL_COOLDOWN = 15f; // Prevent duplicate goal events within 15 seconds
 
+        // Track games: each game gets its own file
+
         private void Awake()
         {
             if (instance != null && instance != this)
@@ -60,11 +62,12 @@ namespace ShotTracker
                 try
                 {
                     MonoBehaviourSingleton<EventManager>.Instance.AddEventListener("Event_Server_OnPuckEnterTeamGoal", OnGoalScored);
-                    Plugin.Log("[SERVER] Goal event listener registered successfully");
+                    MonoBehaviourSingleton<EventManager>.Instance.AddEventListener("Event_OnGamePhaseChanged", OnGamePhaseChanged);
+                    Plugin.Log("[SERVER] Event listeners registered successfully");
                 }
                 catch (Exception ex)
                 {
-                    Plugin.LogError($"[SERVER] Failed to add goal event listener: {ex.Message}");
+                    Plugin.LogError($"[SERVER] Failed to add event listeners: {ex.Message}");
                 }
             }
             else
@@ -81,8 +84,27 @@ namespace ShotTracker
             if (isInitialized)
                 return;
 
+            isInitialized = true;
+
+            // Start the first game
+            StartNewGame();
+            Plugin.Log($"[SERVER SESSION] Shot Tracker initialized");
+        }
+
+        private void StartNewGame()
+        {
+            // Save any existing game data before starting new game
+            if (shotCollection != null && shotCollection.Shots.Count > 0)
+            {
+                SaveToFile();
+                Plugin.Log($"[SERVER] Previous game finalized with {shotCollection.Shots.Count} shots");
+            }
+
+            // Create new collection for the new game
             shotCollection = new ShotDataCollection();
-            string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+
+            // Generate timestamp for this game (when it starts)
+            string gameTimestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
             string configPath = Path.Combine(Path.GetFullPath("."), "config");
             string shotTrackerPath = Path.Combine(configPath, "ShotTracker");
 
@@ -91,14 +113,14 @@ namespace ShotTracker
                 Directory.CreateDirectory(shotTrackerPath);
             }
 
-            filePath = Path.Combine(shotTrackerPath, $"shot_tracker_{timestamp}.json");
-            isInitialized = true;
-            Plugin.Log($"[SERVER SESSION] Shot Tracker session started: {filePath}");
+            filePath = Path.Combine(shotTrackerPath, $"shot_tracker_{gameTimestamp}.json");
+            Plugin.Log($"[SERVER] Started tracking new game: {filePath}");
         }
 
         private void OnDestroy()
         {
             MonoBehaviourSingleton<EventManager>.Instance.RemoveEventListener("Event_Server_OnPuckEnterTeamGoal", OnGoalScored);
+            MonoBehaviourSingleton<EventManager>.Instance.RemoveEventListener("Event_OnGamePhaseChanged", OnGamePhaseChanged);
             SaveToFile();
         }
 
@@ -160,21 +182,21 @@ namespace ShotTracker
         {
             shotCollection.Shots.Add(shotData);
             SaveToFile();
-            Plugin.Log($"[SERVER] SHOT: {shotData.PlayerName} ({shotData.Team}#{shotData.PlayerNumber}) -> {shotData.TargetGoal} | {shotData.ShotSpeed:F1} m/s");
+            Plugin.Log($"[SERVER] SHOT: {shotData.PlayerName} ({shotData.Team}#{shotData.PlayerNumber}) -> {shotData.TargetGoal} | {shotData.ShotSpeed:F1} m/s | Period {shotData.Period}{(shotData.IsOvertime ? " (OT)" : "")}");
         }
 
         public void RecordShotOnGoal(ShotData shotData)
         {
             shotCollection.Shots.Add(shotData);
             SaveToFile();
-            Plugin.Log($"[SERVER] SHOT ON GOAL: {shotData.PlayerName} ({shotData.Team}#{shotData.PlayerNumber}) -> {shotData.TargetGoal} | {shotData.ShotSpeed:F1} m/s");
+            Plugin.Log($"[SERVER] SHOT ON GOAL: {shotData.PlayerName} ({shotData.Team}#{shotData.PlayerNumber}) -> {shotData.TargetGoal} | {shotData.ShotSpeed:F1} m/s | Period {shotData.Period}{(shotData.IsOvertime ? " (OT)" : "")}");
         }
 
         public void RecordGoal(ShotData shotData)
         {
             shotCollection.Shots.Add(shotData);
             SaveToFile();
-            Plugin.Log($"[SERVER] GOAL: {shotData.PlayerName} ({shotData.Team}#{shotData.PlayerNumber}) -> {shotData.TargetGoal} | {shotData.ShotSpeed:F1} m/s");
+            Plugin.Log($"[SERVER] GOAL: {shotData.PlayerName} ({shotData.Team}#{shotData.PlayerNumber}) -> {shotData.TargetGoal} | {shotData.ShotSpeed:F1} m/s | Period {shotData.Period}{(shotData.IsOvertime ? " (OT)" : "")}");
         }
 
         public bool HasPuckReachedGoalZone(string targetGoal, Vector3 puckPosition)
@@ -185,6 +207,23 @@ namespace ShotTracker
             Vector3 goalCenter = (targetGoal == "Red") ? redGoalPosition : blueGoalPosition;
             float distanceToGoal = Vector3.Distance(puckPosition, goalCenter);
             return distanceToGoal <= GOAL_RADIUS;
+        }
+
+        private void OnGamePhaseChanged(Dictionary<string, object> message)
+        {
+            try
+            {
+                // Check if this is the first face-off of a new game
+                if (message.ContainsKey("isFirstFaceOff") && (bool)message["isFirstFaceOff"])
+                {
+                    Plugin.Log($"[SERVER] New game detected (first face-off). Starting new tracking file.");
+                    StartNewGame();
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.LogError($"Error handling game phase change: {ex.Message}");
+            }
         }
 
         private void OnGoalScored(Dictionary<string, object> message)
@@ -246,6 +285,16 @@ namespace ShotTracker
                     shotDirection = goalPuck.Rigidbody.linearVelocity.normalized;
                 }
 
+                // Capture period information at goal time
+                int currentPeriod = 0;
+                bool isOvertimePeriod = false;
+                GameManager gameManager = GameManager.Instance;
+                if (gameManager != null && gameManager.GameState != null)
+                {
+                    currentPeriod = gameManager.GameState.Value.Period;
+                    isOvertimePeriod = currentPeriod > 3;
+                }
+
                 // The team whose goal was entered IS the target goal
                 string targetGoalStr = scoringTeam.ToString();
 
@@ -266,13 +315,15 @@ namespace ShotTracker
                     Timestamp = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"),
                     DirectionX = shotDirection.x,
                     DirectionY = shotDirection.y,
-                    DirectionZ = shotDirection.z
+                    DirectionZ = shotDirection.z,
+                    Period = currentPeriod,
+                    IsOvertime = isOvertimePeriod
                 };
 
                 shotCollection.Shots.Add(goalData);
                 lastGoalTime = Time.time;
                 SaveToFile();
-                Plugin.Log($"[SERVER] GOAL (fallback): {goalData.PlayerName} ({goalData.Team}#{goalData.PlayerNumber}) -> {targetGoalStr} | {goalData.ShotSpeed:F1} m/s");
+                Plugin.Log($"[SERVER] GOAL (fallback): {goalData.PlayerName} ({goalData.Team}#{goalData.PlayerNumber}) -> {targetGoalStr} | {goalData.ShotSpeed:F1} m/s | Period {goalData.Period}{(goalData.IsOvertime ? " (OT)" : "")}");
             }
             catch (Exception ex)
             {

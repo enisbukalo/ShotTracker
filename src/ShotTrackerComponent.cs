@@ -84,6 +84,16 @@ namespace ShotTracker
                 shotDirection = puck.Rigidbody.linearVelocity.normalized;
             }
 
+            // Capture period information at shot time
+            int currentPeriod = 0;
+            bool isOvertimePeriod = false;
+            GameManager gameManager = GameManager.Instance;
+            if (gameManager != null && gameManager.GameState != null)
+            {
+                currentPeriod = gameManager.GameState.Value.Period;
+                isOvertimePeriod = currentPeriod > 3;
+            }
+
             ShotData shotData = new ShotData
             {
                 PlayerName = player.Username.Value.ToString(),
@@ -101,7 +111,9 @@ namespace ShotTracker
                 Timestamp = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"),
                 DirectionX = shotDirection.x,
                 DirectionY = shotDirection.y,
-                DirectionZ = shotDirection.z
+                DirectionZ = shotDirection.z,
+                Period = currentPeriod,
+                IsOvertime = isOvertimePeriod
             };
 
             // Replace any existing pending shot

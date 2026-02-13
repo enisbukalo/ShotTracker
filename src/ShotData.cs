@@ -26,6 +26,10 @@ namespace ShotTracker
         public string TargetGoal { get; set; }
         public string Timestamp { get; set; }
 
+        // Period tracking (1, 2, 3 for regular periods, 4+ for overtime)
+        public int Period { get; set; }
+        public bool IsOvertime { get; set; }
+
         // Shot direction (normalized velocity vector)
         public float DirectionX { get; set; }
         public float DirectionY { get; set; }
