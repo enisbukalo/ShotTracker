@@ -94,11 +94,15 @@ namespace ShotTracker
                 isOvertimePeriod = currentPeriod > 3;
             }
 
+            // Look up the goalie defending the target goal
+            string goalieName = FindGoalieName(targetGoal);
+
             ShotData shotData = new ShotData
             {
                 PlayerName = player.Username.Value.ToString(),
                 PlayerNumber = player.Number.Value,
                 Team = player.Team.Value.ToString(),
+                GoalieName = goalieName,
                 PlayerPositionX = playerPos.x,
                 PlayerPositionY = playerPos.y,
                 PlayerPositionZ = playerPos.z,
@@ -168,6 +172,11 @@ namespace ShotTracker
                     hitGoalie = true;
                     // Store the puck position when it hit the goalie
                     pendingShot.GoalieHitPosition = puck.transform.position;
+                    // Capture the goalie's name from the actual collision
+                    if (player.Username != null)
+                    {
+                        pendingShot.Data.GoalieName = player.Username.Value.ToString();
+                    }
                 }
             }
         }
@@ -276,6 +285,31 @@ namespace ShotTracker
                 pendingShot = null;
                 hitGoalie = false;
             }
+        }
+
+        /// <summary>
+        /// Finds the name of the goalie defending the given target goal team.
+        /// </summary>
+        private string FindGoalieName(string targetGoal)
+        {
+            try
+            {
+                PlayerTeam goalTeam = (targetGoal == "Blue") ? PlayerTeam.Blue : PlayerTeam.Red;
+                var players = NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayersByTeam(goalTeam);
+                foreach (var p in players)
+                {
+                    if (p != null && p.Role != null && p.Role.Value == PlayerRole.Goalie
+                        && p.Username != null)
+                    {
+                        return p.Username.Value.ToString();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.LogError($"Failed to find goalie for {targetGoal}: {ex.Message}");
+            }
+            return null;
         }
 
         private bool CheckIfHitsGoalie(string targetGoal, float detectionTime)

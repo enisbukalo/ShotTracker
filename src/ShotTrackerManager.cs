@@ -103,6 +103,21 @@ namespace ShotTracker
             // Create new collection for the new game
             shotCollection = new ShotDataCollection();
 
+            // Capture server name
+            try
+            {
+                var serverManager = NetworkBehaviourSingleton<ServerManager>.Instance;
+                if (serverManager != null)
+                {
+                    shotCollection.ServerName = serverManager.Server.Name.ToString();
+                    Plugin.Log($"[SERVER] Server name: {shotCollection.ServerName}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.LogError($"Failed to get server name: {ex.Message}");
+            }
+
             // Generate timestamp for this game (when it starts)
             string gameTimestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
             string configPath = Path.Combine(Path.GetFullPath("."), "config");
@@ -182,21 +197,21 @@ namespace ShotTracker
         {
             shotCollection.Shots.Add(shotData);
             SaveToFile();
-            Plugin.Log($"[SERVER] SHOT: {shotData.PlayerName} ({shotData.Team}#{shotData.PlayerNumber}) -> {shotData.TargetGoal} | {shotData.ShotSpeed:F1} m/s | Period {shotData.Period}{(shotData.IsOvertime ? " (OT)" : "")}");
+            Plugin.Log($"[SERVER] SHOT: {shotData.PlayerName} ({shotData.Team}#{shotData.PlayerNumber}) -> {shotData.TargetGoal} | Goalie: {shotData.GoalieName ?? "N/A"} | {shotData.ShotSpeed:F1} m/s | Period {shotData.Period}{(shotData.IsOvertime ? " (OT)" : "")}");
         }
 
         public void RecordShotOnGoal(ShotData shotData)
         {
             shotCollection.Shots.Add(shotData);
             SaveToFile();
-            Plugin.Log($"[SERVER] SHOT ON GOAL: {shotData.PlayerName} ({shotData.Team}#{shotData.PlayerNumber}) -> {shotData.TargetGoal} | {shotData.ShotSpeed:F1} m/s | Period {shotData.Period}{(shotData.IsOvertime ? " (OT)" : "")}");
+            Plugin.Log($"[SERVER] SHOT ON GOAL: {shotData.PlayerName} ({shotData.Team}#{shotData.PlayerNumber}) -> {shotData.TargetGoal} | Goalie: {shotData.GoalieName ?? "N/A"} | {shotData.ShotSpeed:F1} m/s | Period {shotData.Period}{(shotData.IsOvertime ? " (OT)" : "")}");
         }
 
         public void RecordGoal(ShotData shotData)
         {
             shotCollection.Shots.Add(shotData);
             SaveToFile();
-            Plugin.Log($"[SERVER] GOAL: {shotData.PlayerName} ({shotData.Team}#{shotData.PlayerNumber}) -> {shotData.TargetGoal} | {shotData.ShotSpeed:F1} m/s | Period {shotData.Period}{(shotData.IsOvertime ? " (OT)" : "")}");
+            Plugin.Log($"[SERVER] GOAL: {shotData.PlayerName} ({shotData.Team}#{shotData.PlayerNumber}) -> {shotData.TargetGoal} | Goalie: {shotData.GoalieName ?? "N/A"} | {shotData.ShotSpeed:F1} m/s | Period {shotData.Period}{(shotData.IsOvertime ? " (OT)" : "")}");
         }
 
         public bool HasPuckReachedGoalZone(string targetGoal, Vector3 puckPosition)
@@ -298,11 +313,15 @@ namespace ShotTracker
                 // The team whose goal was entered IS the target goal
                 string targetGoalStr = scoringTeam.ToString();
 
+                // Look up the goalie defending the scored-on goal
+                string goalieName = FindGoalieName(scoringTeam);
+
                 ShotData goalData = new ShotData
                 {
                     PlayerName = goalScorer.Username.Value.ToString(),
                     PlayerNumber = goalScorer.Number.Value,
                     Team = goalScorer.Team.Value.ToString(),
+                    GoalieName = goalieName,
                     PlayerPositionX = playerPos.x,
                     PlayerPositionY = playerPos.y,
                     PlayerPositionZ = playerPos.z,
@@ -323,12 +342,36 @@ namespace ShotTracker
                 shotCollection.Shots.Add(goalData);
                 lastGoalTime = Time.time;
                 SaveToFile();
-                Plugin.Log($"[SERVER] GOAL (fallback): {goalData.PlayerName} ({goalData.Team}#{goalData.PlayerNumber}) -> {targetGoalStr} | {goalData.ShotSpeed:F1} m/s | Period {goalData.Period}{(goalData.IsOvertime ? " (OT)" : "")}");
+                Plugin.Log($"[SERVER] GOAL (fallback): {goalData.PlayerName} ({goalData.Team}#{goalData.PlayerNumber}) -> {targetGoalStr} | Goalie: {goalData.GoalieName ?? "N/A"} | {goalData.ShotSpeed:F1} m/s | Period {goalData.Period}{(goalData.IsOvertime ? " (OT)" : "")}");
             }
             catch (Exception ex)
             {
                 Plugin.LogError($"Error recording goal: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Finds the name of the goalie defending the given team's goal.
+        /// </summary>
+        private string FindGoalieName(PlayerTeam goalTeam)
+        {
+            try
+            {
+                var players = NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayersByTeam(goalTeam);
+                foreach (var p in players)
+                {
+                    if (p != null && p.Role != null && p.Role.Value == PlayerRole.Goalie
+                        && p.Username != null)
+                    {
+                        return p.Username.Value.ToString();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.LogError($"Failed to find goalie for {goalTeam}: {ex.Message}");
+            }
+            return null;
         }
 
         private void SaveToFile()

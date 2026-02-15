@@ -11,6 +11,11 @@ namespace ShotTracker
         public int PlayerNumber { get; set; }
         public string Team { get; set; }
 
+        // Goalie and player hand information
+        public string GoalieName { get; set; }
+        public string GoalieHand { get; set; }
+        public string PlayerHand { get; set; }
+
         // Player position (XYZ)
         public float PlayerPositionX { get; set; }
         public float PlayerPositionY { get; set; }
@@ -58,6 +63,7 @@ namespace ShotTracker
     public class ShotDataCollection
     {
         public string SessionStart { get; set; }
+        public string ServerName { get; set; }
         public PhysicsSettings Physics { get; set; }
         public List<ShotData> Shots { get; set; }
 
