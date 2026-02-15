@@ -275,6 +275,19 @@ namespace ShotTracker
             // If puck was in zone and now left zone → finalize shot
             if (!currentlyInGoalZone && pendingShot.ReachedGoalZone)
             {
+                // Final goalie lookup if initial lookup failed
+                if (pendingShot.Data.GoalieName == null)
+                {
+                    Player goalie = FindGoalie(pendingShot.Data.TargetGoal);
+                    if (goalie != null)
+                    {
+                        if (goalie.Username != null)
+                            pendingShot.Data.GoalieName = goalie.Username.Value.ToString();
+                        if (goalie.Handedness != null)
+                            pendingShot.Data.GoalieHand = goalie.Handedness.Value.ToString();
+                    }
+                }
+
                 // Check if goalie was hit during this shot
                 if (hitGoalie)
                 {
@@ -322,38 +335,5 @@ namespace ShotTracker
             return null;
         }
 
-        private bool CheckIfHitsGoalie(string targetGoal, float detectionTime)
-        {
-            try
-            {
-                var playerCollisions = puck.GetPlayerCollisions();
-                if (playerCollisions == null)
-                    return false;
-
-                foreach (var collision in playerCollisions)
-                {
-                    Player player = collision.Key;
-
-                    // Null check for network variables during initialization
-                    if (player == null || player.Role == null || player.Team == null)
-                        continue;
-
-                    if (player.Role.Value == PlayerRole.Goalie)
-                    {
-                        // Verify this goalie is defending the target goal
-                        string goalieTeam = player.Team.Value.ToString();
-                        if (goalieTeam == targetGoal)
-                        {
-                            return true; // Hit the goalie defending this goal
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Plugin.LogError($"Goalie check error: {ex.Message}");
-            }
-            return false;
-        }
     }
 }
