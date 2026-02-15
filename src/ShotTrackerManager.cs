@@ -314,7 +314,12 @@ namespace ShotTracker
                 string targetGoalStr = scoringTeam.ToString();
 
                 // Look up the goalie defending the scored-on goal
-                string goalieName = FindGoalieName(scoringTeam);
+                Player goalie = FindGoalie(scoringTeam);
+                string goalieName = goalie?.Username?.Value.ToString();
+                string goalieHand = goalie?.Handedness?.Value.ToString();
+
+                // Get scorer's handedness
+                string playerHand = goalScorer.Handedness?.Value.ToString();
 
                 ShotData goalData = new ShotData
                 {
@@ -322,6 +327,8 @@ namespace ShotTracker
                     PlayerNumber = goalScorer.Number.Value,
                     Team = goalScorer.Team.Value.ToString(),
                     GoalieName = goalieName,
+                    GoalieHand = goalieHand,
+                    PlayerHand = playerHand,
                     PlayerPositionX = playerPos.x,
                     PlayerPositionY = playerPos.y,
                     PlayerPositionZ = playerPos.z,
@@ -351,19 +358,18 @@ namespace ShotTracker
         }
 
         /// <summary>
-        /// Finds the name of the goalie defending the given team's goal.
+        /// Finds the goalie defending the given team's goal.
         /// </summary>
-        private string FindGoalieName(PlayerTeam goalTeam)
+        private Player FindGoalie(PlayerTeam goalTeam)
         {
             try
             {
                 var players = NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayersByTeam(goalTeam);
                 foreach (var p in players)
                 {
-                    if (p != null && p.Role != null && p.Role.Value == PlayerRole.Goalie
-                        && p.Username != null)
+                    if (p != null && p.Role != null && p.Role.Value == PlayerRole.Goalie)
                     {
-                        return p.Username.Value.ToString();
+                        return p;
                     }
                 }
             }

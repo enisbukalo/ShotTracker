@@ -95,7 +95,12 @@ namespace ShotTracker
             }
 
             // Look up the goalie defending the target goal
-            string goalieName = FindGoalieName(targetGoal);
+            Player goalie = FindGoalie(targetGoal);
+            string goalieName = goalie?.Username?.Value.ToString();
+            string goalieHand = goalie?.Handedness?.Value.ToString();
+
+            // Get shooter's handedness
+            string playerHand = player.Handedness?.Value.ToString();
 
             ShotData shotData = new ShotData
             {
@@ -103,6 +108,8 @@ namespace ShotTracker
                 PlayerNumber = player.Number.Value,
                 Team = player.Team.Value.ToString(),
                 GoalieName = goalieName,
+                GoalieHand = goalieHand,
+                PlayerHand = playerHand,
                 PlayerPositionX = playerPos.x,
                 PlayerPositionY = playerPos.y,
                 PlayerPositionZ = playerPos.z,
@@ -172,10 +179,14 @@ namespace ShotTracker
                     hitGoalie = true;
                     // Store the puck position when it hit the goalie
                     pendingShot.GoalieHitPosition = puck.transform.position;
-                    // Capture the goalie's name from the actual collision
+                    // Capture the goalie's name and handedness from the actual collision
                     if (player.Username != null)
                     {
                         pendingShot.Data.GoalieName = player.Username.Value.ToString();
+                    }
+                    if (player.Handedness != null)
+                    {
+                        pendingShot.Data.GoalieHand = player.Handedness.Value.ToString();
                     }
                 }
             }
@@ -288,9 +299,9 @@ namespace ShotTracker
         }
 
         /// <summary>
-        /// Finds the name of the goalie defending the given target goal team.
+        /// Finds the goalie defending the given target goal team.
         /// </summary>
-        private string FindGoalieName(string targetGoal)
+        private Player FindGoalie(string targetGoal)
         {
             try
             {
@@ -298,10 +309,9 @@ namespace ShotTracker
                 var players = NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayersByTeam(goalTeam);
                 foreach (var p in players)
                 {
-                    if (p != null && p.Role != null && p.Role.Value == PlayerRole.Goalie
-                        && p.Username != null)
+                    if (p != null && p.Role != null && p.Role.Value == PlayerRole.Goalie)
                     {
-                        return p.Username.Value.ToString();
+                        return p;
                     }
                 }
             }
